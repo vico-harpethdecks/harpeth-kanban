@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Harpeth Decks Kanban</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #1a1a1a; }
+        .column { min-width: 300px; flex: 1; background: #e5e7eb; border-radius: 8px; padding: 12px; height: calc(100vh - 120px); overflow-y: auto; }
+        .card { background: white; border-radius: 6px; padding: 12px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: grab; }
+        .card:active { cursor: grabbing; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const App = () => {
+            const [tasks, setTasks] = useState([]);
+            const [newTask, setNewTask] = useState({ title: '', description: '', status: 'To Do' });
+
+            useEffect(() => {
+                fetchTasks();
+            }, []);
+
+            const fetchTasks = async () => {
+                const res = await fetch('/api/tasks');
+                const data = await res.json();
+                setTasks(data);
+            };
+
+            const addTask = async (e) => {
+                e.preventDefault();
+                const res = await fetch('/api/tasks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newTask)
+                });
+                const data = await res.json();
+                setTasks([...tasks, data]);
+                setNewTask({ title: '', description: '', status: 'To Do' });
+            };
+
+            const updateStatus = async (id, status) => {
+                const task = tasks.find(t => t.id === id);
+                const res = await fetch(`/api/tasks/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...task, status })
+                });
+                const data = await res.json();
+                setTasks(tasks.map(t => t.id === id ? data : t));
+            };
+
+            const deleteTask = async (id) => {
+                await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+                setTasks(tasks.filter(t => t.id !== id));
+            };
+
+            const columns = ['To Do', 'In Progress', 'Review', 'Done'];
+
+            return (
+                <div className="p-6">
+                    <header className="flex justify-between items-center mb-6">
+                        <h1 className="text-2xl font-bold">Harpeth Decks Kanban</h1>
+                        <form onSubmit={addTask} className="flex gap-2">
+                            <input 
+                                className="border p-2 rounded"
+                                placeholder="Task Title"
+                                value={newTask.title}
+                                onChange={e => setNewTask({...newTask, title: e.target.value})}
+                                required
+                            />
+                            <button className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Add Task</button>
+                        </form>
+                    </header>
+                    <div className="flex gap-4 overflow-x-auto">
+                        {columns.map(col => (
+                            <div key={col} className="column shadow-sm">
+                                <h2 className="font-semibold mb-4 flex justify-between">
+                                    {col}
+                                    <span className="text-gray-500 font-normal">{tasks.filter(t => t.status === col).length}</span>
+                                </h2>
+                                {tasks.filter(t => t.status === col).map(task => (
+                                    <div key={task.id} className="card">
+                                        <h3 className="font-medium">{task.title}</h3>
+                                        <div className="mt-3 flex justify-between items-center">
+                                            <select 
+                                                className="text-xs border rounded p-1"
+                                                value={task.status}
+                                                onChange={e => updateStatus(task.id, e.target.value)}
+                                            >
+                                                {columns.map(c => <option key={c} value={c}>{c}</option>)}
+                                            </select>
+                                            <button onClick={() => deleteTask(task.id)} className="text-red-500 text-xs hover:underline">Delete</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
