@@ -18,28 +18,41 @@ const db = new sqlite3.Database(dbPath, (err) => {
 });
 
 db.serialize(() => {
-    db.run(`
+    // Add created_at column if it doesn't exist
+    db.run(\`
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
             description TEXT,
-            status TEXT DEFAULT 'To Do'
+            status TEXT DEFAULT 'Not Started',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            assignee TEXT
         )
-    `);
+    \`);
+    
+    // Check if created_at exists (migration for existing DB)
+    db.all("PRAGMA table_info(tasks)", (err, rows) => {
+        if (rows && !rows.some(row => row.name === 'created_at')) {
+            db.run("ALTER TABLE tasks ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP");
+        }
+        if (rows && !rows.some(row => row.name === 'assignee')) {
+            db.run("ALTER TABLE tasks ADD COLUMN assignee TEXT");
+        }
+    });
 });
 
 app.get('/api/tasks', (req, res) => {
-    db.all('SELECT * FROM tasks', [], (err, rows) => {
+    db.all('SELECT * FROM tasks ORDER BY created_at DESC', [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
 });
 
 app.post('/api/tasks', (req, res) => {
-    const { title, description, status } = req.body;
+    const { title, description, status, assignee } = req.body;
     db.run(
-        'INSERT INTO tasks (title, description, status) VALUES (?, ?, ?)',
-        [title, description, status || 'To Do'],
+        'INSERT INTO tasks (title, description, status, assignee) VALUES (?, ?, ?, ?)',
+        [title, description, status || 'Not Started', assignee],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
             db.get('SELECT * FROM tasks WHERE id = ?', this.lastID, (err, row) => {
@@ -51,10 +64,10 @@ app.post('/api/tasks', (req, res) => {
 
 app.put('/api/tasks/:id', (req, res) => {
     const { id } = req.params;
-    const { title, description, status } = req.body;
+    const { title, description, status, assignee } = req.body;
     db.run(
-        'UPDATE tasks SET title = ?, description = ?, status = ? WHERE id = ?',
-        [title, description, status, id],
+        'UPDATE tasks SET title = ?, description = ?, status = ?, assignee = ? WHERE id = ?',
+        [title, description, status, assignee, id],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
             db.get('SELECT * FROM tasks WHERE id = ?', id, (err, row) => {
@@ -73,5 +86,5 @@ app.delete('/api/tasks/:id', (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
+    console.log(\`Server running at http://localhost:\${port}\`);
 });
