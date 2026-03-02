@@ -18,27 +18,17 @@ const db = new sqlite3.Database(dbPath, (err) => {
 });
 
 db.serialize(() => {
-    // Add created_at column if it doesn't exist
-    db.run(\`
+    // Final schema setup - fresh start is cleanest
+    db.run(`
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
             description TEXT,
             status TEXT DEFAULT 'Not Started',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            assignee TEXT
+            assignee TEXT DEFAULT 'Daniel 🧔'
         )
-    \`);
-    
-    // Check if created_at exists (migration for existing DB)
-    db.all("PRAGMA table_info(tasks)", (err, rows) => {
-        if (rows && !rows.some(row => row.name === 'created_at')) {
-            db.run("ALTER TABLE tasks ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP");
-        }
-        if (rows && !rows.some(row => row.name === 'assignee')) {
-            db.run("ALTER TABLE tasks ADD COLUMN assignee TEXT");
-        }
-    });
+    `);
 });
 
 app.get('/api/tasks', (req, res) => {
@@ -52,7 +42,7 @@ app.post('/api/tasks', (req, res) => {
     const { title, description, status, assignee } = req.body;
     db.run(
         'INSERT INTO tasks (title, description, status, assignee) VALUES (?, ?, ?, ?)',
-        [title, description, status || 'Not Started', assignee],
+        [title, description, status || 'Not Started', assignee || 'Daniel 🧔'],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
             db.get('SELECT * FROM tasks WHERE id = ?', this.lastID, (err, row) => {
@@ -86,5 +76,5 @@ app.delete('/api/tasks/:id', (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(\`Server running at http://localhost:\${port}\`);
+    console.log(`Server running at http://localhost:${port}`);
 });
